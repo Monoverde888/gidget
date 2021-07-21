@@ -14,8 +14,8 @@ export default class extends Command {
     super(options)
     this.description = "Generate a QR";
     this.permissions = {
-      user: [0, 0],
-      bot: [0, 32768]
+      user: [0n, 0n],
+      bot: [0n, 32768n]
     };
   }
   async run(bot, message, args) {
@@ -35,7 +35,7 @@ export default class extends Command {
           const code = jsQR(ctx.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height);
           if(code) {
             if(!code.data) return message.channel.send("I couldn't read any QR code. Try again");
-            const newstr = Util.splitMessage(code.data, { limit: 1900, char: " " });
+            const newstr = Util.splitMessage(code.data, { limit: 2000, char: " " });
             message.channel.stopTyping(true);
          await message.channel.send("`Output:` " + newstr[0]);
           } else {
@@ -65,7 +65,7 @@ export default class extends Command {
         encoder.on("end", (buf) => {
           const att = new MessageAttachment(buf, "qr.png");
           message.channel.stopTyping(true);
-          message.channel.send(att);
+          message.channel.send({ files: [att] });
         })
         encoder.on("error", (err) => {
           message.channel.stopTyping(true);

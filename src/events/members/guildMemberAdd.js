@@ -1,7 +1,13 @@
 import MessageModel from "../../database/models/roles.js";
 import MessageModel2 from "../../database/models/retreiveconfig.js";
+import tempmuteconfig from '../../database/models/muterole.js';
+import tempmute from '../../database/models/mutedmembers.js';
+import tempmutesystem from '../../utils/tempmute.js';
 import Discord from "discord.js";
+
 export default async (bot, member) => {
+
+  //RETRIVING ROLES
   let verify = bot.rrcache.get(member.guild.id);
   if (!verify) {
     verify = await MessageModel2.findOne({ guildId: member.guild.id });
@@ -12,21 +18,31 @@ export default async (bot, member) => {
       memberid: member.user.id
     });
     if (msgDocument) {
-      if (member.guild.me.hasPermission("MANAGE_ROLES")) {
+      if (member.guild.me.permissions.has("MANAGE_ROLES")) {
         const { roles } = msgDocument;
-        const toadd = [];
-        for (const r of roles) {
-          const role = member.guild.roles.cache.get(r);
-          if (role && !role.deleted && role.editable && !role.managed) {
-            toadd.push(role.id);
-          }
-        }
-        await member.roles.add(toadd, "Retrieving roles").catch(() => { });
+        const col = member.guild.roles.cache.filter(role => roles.includes(role.id) && (!role.deleted && role.editable && !role.managed));
+        if(col.size >= 1)await member.roles.add(col, "Retrieving roles").catch(() => { });
       }
       msgDocument.deleteOne();
     }
   }
 
+  //TEMPMUTE -> PERSIST
+  const data = await tempmute.findOne({ memberId: { $eq: member.id }, guildId: { $eq: member.guild.id } });
+  if (data && (Date.now() < data.date.getTime())) {
+    const guildData = await tempmuteconfig.findOne({ guildid: { $eq: member.guild.id } });
+    if (guildData) {
+      if (member.guild.me.permissions.has("MANAGE_ROLES")) {
+        member.roles.add(guildData.muteroleid, "Temprestrict - Persist").catch(() => { });
+      }
+    }
+    tempmutesystem(bot, true);
+  } else if(data && (Date.now() > data.date.getTime())) {
+    await data.deleteOne();
+    tempmutesystem(bot, true);
+  }
+
+  //WELCOME SYSTEM
   const welcome = member.guild.cache.welcome ? member.guild.welcome : await member.guild.getWelcome();
 
   if (welcome) {
@@ -34,8 +50,8 @@ export default async (bot, member) => {
     let inviterTag = "Unknown";
     let inviterId = "Unknown";
     try {
-      if (((/%INVITER%/gmi.test(welcome.text)) || (/%INVITER%/gmi.test(welcome.dmmessage))) && member.guild.me.hasPermission("MANAGE_GUILD")) {
-        const invitesBefore = member.guild.inviteCount
+      if (((/%INVITER%/gmi.test(welcome.text)) || (/%INVITER%/gmi.test(welcome.dmmessage))) && member.guild.me.permissions.has("MANAGE_GUILD")) {
+        const invitesBefore = member.guild.inviteCount;
         const invitesAfter = await member.guild.getInviteCount();
         for (const inviter in invitesAfter) {
           if (invitesBefore[inviter] === (invitesAfter[inviter] - 1)) {
@@ -53,13 +69,13 @@ export default async (bot, member) => {
       }
     } catch (err) {
       console.log(err);
-      if (member.guild.me.hasPermission("MANAGE_GUILD")) {
+      if (member.guild.me.permissions.has("MANAGE_GUILD")) {
         member.guild.inviteCount = await member.guild.getInviteCount();
       }
     } finally {
       if (welcome.enabled && welcome.text) {
         const channel = member.guild.channels.cache.get(welcome.channelID);
-        if (channel && ["news", "text"].includes(channel.type) && channel.permissionsFor(member.guild.me.id).has(["VIEW_CHANNEL", "SEND_MESSAGES"])) {
+        if (channel && channel.isText() && channel.permissionsFor(member.guild.me.id).has(["VIEW_CHANNEL", "SEND_MESSAGES"])) {
           const finalText = welcome.text.replace(/%MEMBER%/gmi, member.toString()).replace(/%MEMBERTAG%/, member.user.tag).replace(/%MEMBERID%/, member.id).replace(/%SERVER%/gmi, member.guild.name).replace(/%INVITER%/gmi, inviterMention).replace(/%INVITERTAG%/gmi, inviterTag).replace(/%INVITERID%/gmi, inviterId).replace(/%MEMBERCOUNT%/, member.guild.memberCount);
           await channel.send(finalText || "?", { allowedMentions: { users: [member.id] } }).catch(() => { });
         }
@@ -70,6 +86,7 @@ export default async (bot, member) => {
       }
     }
   }
+
   //Things for Wow Wow Discord
   if (member.guild.id !== "402555684849451028") return;
   const embed = new Discord.MessageEmbed()
@@ -97,5 +114,5 @@ export default async (bot, member) => {
     )
     .setFooter("Thanks for joining!")
     .setTimestamp();
-  await member.send(embed).catch(() => {});
+  await member.send({ embeds: [embed] }).catch(() => { });
 };

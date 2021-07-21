@@ -7,8 +7,8 @@ export default class extends Command {
     super(options);
     this.description = "User info";
     this.permissions = {
-      user: [0, 0],
-      bot: [0, 16384]
+      user: [0n, 0n],
+      bot: [0n, 16384n]
     };
   }
   async run(bot, message, args) {
@@ -183,12 +183,13 @@ export default class extends Command {
           embed.addField("Nitro type", finaltext, true);
         }
         embed
-        /*.addField("Status", status2, true)
-          .addField("Presence", ptext, true)*/
+          /*.addField("Status", status2, true)
+            .addField("Presence", ptext, true)*/
           .addField("Flags", `\`${flagtext}\``, true)
           .addField("Permissions (General)", `\`${permstext}\``, true)
           .addField("Permissions (Overwrites)", `\`${permstext2}\``, true)
-          .addField("Last Message", user.lastMessage ? user.lastMessage.url : "Without fetch about that");
+          .addField("Still being verified?", member.pending ? "**Yes**" : "No")
+        /*.addField("Last Message", user.lastMessage ? user.lastMessage.url : "Without fetch about that");*/
         if (!user.bot) {
           embed.addField("Boosting?", member.premiumSince ? `Yes, since ${bot.botIntl.format(member.premiumSince)}` : "No");
         }
@@ -204,9 +205,8 @@ export default class extends Command {
               .map(roles => `${roles}`)
               .join(" **|** ") || "No Roles"}`
           );
-        await message.channel.send(embed);
+        await message.channel.send({ embeds: [embed] });
       } catch (err) {
-        console.log(err);
         embed
           .addField("Full Username", user.tag + "\n" + user.toString(), true)
           .addField("ID", user.id, true)
@@ -215,18 +215,18 @@ export default class extends Command {
           embed.addField("Nitro type", finaltext, true);
         }
         embed
-        /*.addField("Status", status2, true)
-          .addField("Presence", Discord.Util.splitMessage(ptext, { maxLength: 1000 })[0], true)*/
+          /*.addField("Status", status2, true)
+            .addField("Presence", Discord.Util.splitMessage(ptext, { maxLength: 1000 })[0], true)*/
           .addField("Flags", `\`${flagtext}\``, true)
-          .addField(
+          /*.addField(
             "Last Message",
             user.lastMessage ? user.lastMessage.url : "Without fetch about that"
-          )
+          )*/
           .addField(
             "Joined Discord At",
             bot.botIntl.format(user.createdAt)
           );
-        await message.channel.send(embed);
+        await message.channel.send({ embeds: [embed] });
       }
     } else {
       embed
@@ -237,18 +237,18 @@ export default class extends Command {
         embed.addField("Nitro type", finaltext, true);
       }
       embed
-      /*.addField("Status", status2, true)
-        .addField("Presence", ptext, true)*/
+        /*.addField("Status", status2, true)
+          .addField("Presence", ptext, true)*/
         .addField("Flags", `\`${flagtext}\``, true)
-        .addField(
+        /*.addField(
           "Last Message",
           user.lastMessage ? user.lastMessage.url : "Without fetch about that"
-        )
+        )*/
         .addField(
           "Joined Discord At",
           bot.botIntl.format(user.createdAt)
         );
-      await message.channel.send(embed);
+      await message.channel.send({ embeds: [embed] });
     }
   }
 }

@@ -9,14 +9,14 @@ export default class extends Command {
   }
   // eslint-disable-next-line require-await
   async run(bot, message, args) {
-    if(actual.has(message.author.id)) return;
+    if (actual.has(message.author.id)) return;
     let i = 0;
     let channel;
     if (message.guild) {
-      channel = message.mentions.channels.first() || message.guild.channels.cache.get(args[1]) || message.guild.channels.cache.find(c => c.name === args[1]) || await message.guild.channels.fetch(args[1] || "123").catch(() => {}) || message.channel;
+      channel = message.mentions.channels.first() || message.guild.channels.cache.get(args[1]) || message.guild.channels.cache.find(c => c.name === args[1]) || await message.guild.channels.fetch(args[1] || "123").catch(() => { }) || message.channel;
       if (channel.guild.id !== message.guild.id)
         return message.channel.send("That channel is from another guild");
-      if (!["text", "news"].includes(channel.type))
+      if (!channel.isText())
         return message.channel.send("That isn't a text channel!");
       if (!channel.permissionsFor(bot.user.id).has(["SEND_MESSAGES", "EMBED_LINKS"]))
         return message.channel.send("I don't have permissions!");
@@ -35,12 +35,14 @@ export default class extends Command {
     let authorlink = "";
     let footer = "";
     const embed = new MessageEmbed();
-    const collector = message.channel.createMessageCollector((m) => m.author.id === message.author.id, { idle: 120000 });
+    const collector = message.channel.createMessageCollector({ filter: (m) => m.author.id === message.author.id, idle: 120000 });
     collector.on("collect", async (m) => {
       if (m.content.toLowerCase() === "exit")
         return collector.stop("Exited");
       if (m.content.toLowerCase() === "preview")
-        return message.channel.send("Here's a preview of your embed", embed).then(e => e.delete({ timeout: 15000 }));
+        return message.channel.send("Here's a preview of your embed", embed).then(msg => bot.setTimeout(() => {
+          if (!msg.deleted) msg.delete();
+        }, 15000));
       switch (i) {
         case 0:
           if (m.content.toLowerCase() === "none") {
@@ -205,7 +207,7 @@ export default class extends Command {
     collector.on("end", (collected, reason) => {
       if (reason === "field") {
         return fields(message, embed).then(embed => {
-          channel.send(msgContent, embed);
+          channel.send({ content: msgContent, embeds: [embed] });
         }).catch(reason => {
           if (reason === "idle") {
             message.channel.send("Your time is over (2 minutes). Run this command again if you want a embed");
@@ -223,7 +225,7 @@ export default class extends Command {
         message.channel.send("It seems you don't want an embed.");
       }
       else if (reason === "Finished") {
-        channel.send(msgContent, embed);
+        channel.send({ content: msgContent, embeds: [embed] });
       } else if (reason === "idle") {
         message.channel.send("Your time is over (2 minutes). Run this command again if you want a embed");
       } else {
@@ -241,12 +243,12 @@ function fields(message, embed) {
     message.channel.send("To get out of here put **`exit`**\n\nYou can't skip this with `none`...");
     const arr = ["Tell me the field name", "Tell me the field value", "Want this to be a inline field?\n\n**Respond with `yes` or `no`**", "Want another field?\n\n**Respond with `yes` or `no`**"];
     message.channel.send(arr[i]);
-    const collector = message.channel.createMessageCollector((m) => m.author.id === message.author.id, { idle: 120000 });
+    const collector = message.channel.createMessageCollector({ filter: (m) => m.author.id === message.author.id, idle: 120000 });
     collector.on("collect", m => {
-      if(m.content.toLowerCase() === "exit") {
+      if (m.content.toLowerCase() === "exit") {
         return collector.stop("no");
       }
-      if(!m.content) {
+      if (!m.content) {
         return message.channel.send("Don't be crazy, put something on, okay?");
       }
       switch (i) {

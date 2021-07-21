@@ -6,8 +6,8 @@ export default class extends Command {
         this.description = "Role reaction system (Edit)";
         this.guildonly = true;
         this.permissions = {
-            user: [8, 0],
-            bot: [268435456, 0]
+            user: [8n, 0n],
+            bot: [268435456n, 0n]
         };
     }
     async run(bot, message, args) {
@@ -26,15 +26,15 @@ export default class extends Command {
                     const filter = m => m.author.id === author.id && (m.content.toLowerCase() === 'add' || m.content.toLowerCase() === 'remove');
                     channel.send('If you are going to add more reaction-roles to that message, put `add`. To remove the configuration say `remove`');
                     try {
-                        const awaitMsgOps = { max: 1, time: 20000, errors: ['time'] };
-                        const choice = (await channel.awaitMessages(filter, awaitMsgOps)).first();
+                        const awaitMsgOps = { filter, max: 1, time: 20000, errors: ['time'] };
+                        const choice = (await channel.awaitMessages(awaitMsgOps)).first();
                         if (choice.content === "add") {
-                            if (!message.guild.me.hasPermission("MANAGE_ROLES")) return message.channel.send("First give me the permissions to manage roles, okay?")
+                            if (!message.guild.me.permissions.has("MANAGE_ROLES")) return message.channel.send("First give me the permissions to manage roles, okay?")
                             await channel.send("Enter an emoji name followed by the corresponding role name, separated with a comma. e.g: WubbzyWalk, A Wubbzy Fan\nType `?done` when you finish");
                             const collectorResult = await handleCollector(fetchedMessage, author, channel, msgModel);
                             msgModel.updateOne({ emojiRoleMappings: collectorResult }).then(() => {
                                 bot.cachedMessageReactions.delete(fetchedMessage.id)
-                                message.channel.send("Updated!").catch(() => {});
+                                message.channel.send("Updated!").catch(() => { });
                             })
                         }
                         else if (choice.content === "remove") {
@@ -68,7 +68,7 @@ export default class extends Command {
 function handleCollector(fetchedMessage, author, channel, msgModel) {
     return new Promise((resolve) => {
         const collectorFilter = (m) => m.author.id === author.id;
-        const collector = new MessageCollector(channel, collectorFilter);
+        const collector = new MessageCollector(channel, { filter: collectorFilter });
         const emojiRoleMappings = new Map(Object.entries(msgModel.emojiRoleMappings));
         collector.on('collect', async msg => {
             if (msg.content.toLowerCase() === '?done') {
@@ -85,7 +85,9 @@ function handleCollector(fetchedMessage, author, channel, msgModel) {
                         emoji = emojiName;
                     } else {
                         msg.channel.send("Emoji does not exist. Try again.")
-                            .then(msg => msg.delete({ timeout: 2000 }))
+                            .then(msg => msg.client.setTimeout(() => {
+                                if (!msg.deleted) msg.delete();
+                            }, 2000))
                             .catch(err => console.log(err));
                         return;
                     }
@@ -93,7 +95,9 @@ function handleCollector(fetchedMessage, author, channel, msgModel) {
                 const role = msg.guild.roles.cache.get(roleName) || msg.guild.roles.cache.find(role => role.name.toLowerCase() === roleName.toLowerCase());
                 if (!role) {
                     msg.channel.send("Role does not exist. Try again.")
-                        .then(msg => msg.delete({ timeout: 2000 }))
+                        .then(msg => msg.client.setTimeout(() => {
+                            if (!msg.deleted) msg.delete();
+                        }, 2000))
                         .catch(err => console.log(err));
                     return;
                 }

@@ -1,4 +1,3 @@
-
 import db from '../../database/models/voicerole.js';
 import { MessageEmbed } from 'discord.js';
 
@@ -7,10 +6,11 @@ export default class extends Command {
         super(options);
         this.description = "Give a role when a member joins specific voice channels.";
         this.permissions = {
-            user: [8, 0],
-            bot: [268435456, 0]
+            user: [8n, 0n],
+            bot: [268435456n, 0n]
         };
         this.guildonly = true;
+        this.aliases = ["vr"];
     }
     async run(bot, message, args) {
         let list = await db.findOne({ guildID: { $eq: message.guild.id } });
@@ -30,9 +30,10 @@ export default class extends Command {
                 if (!role) continue;
                 embed.addField(`${role.name} (${role.id})`, option.channels.map(e => `<#${e}>`).join(", ") || "No channels");
             }
-            await message.channel.send(embed);
+            await message.channel.send({embeds: [embed]});
         } else {
-            const allChannels = await message.guild.channels.fetch();
+            const acl = await message.guild.channels.fetch();
+            const allChannels = acl.filter(e => e.type === "voice");
             switch (args[1].toLowerCase()) {
                 case "enable": {
                     await list.updateOne({ enabled: (list.enabled ? false : true) });
@@ -50,6 +51,10 @@ export default class extends Command {
                     const realchannels = [];
                     for (const channel of channels) {
                         if (allChannels.get(channel)) realchannels.push(channel);
+                        else {
+                            const rc = allChannels.find(e => e.name === channel);
+                            if(rc) realchannels.push(rc.id);
+                        }
                     }
                     if (realchannels.length < 1) return message.channel.send("No channels selected");
                     await list.updateOne({ $push: { list: { roleID: role.id, channels: realchannels } } });
@@ -78,6 +83,10 @@ export default class extends Command {
                         const realchannels = [];
                         for (const channel of channels) {
                             if (allChannels.get(channel)) realchannels.push(channel);
+                            else {
+                                const rc = allChannels.find(e => e.name === channel);
+                                if(rc) realchannels.push(rc.id);
+                            }
                         }
                         if (realchannels.length < 1) return message.channel.send("No channels selected");
                         thing.channels = realchannels;

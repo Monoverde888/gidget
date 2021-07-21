@@ -10,17 +10,16 @@ export default class extends Command {
         this.guildonly = true;
         this.description = "Role reaction system";
         this.permissions = {
-            user: [8, 0],
-            bot: [268435456, 0]
+            user: [8n, 0n],
+            bot: [268435456n, 0n]
         };
     }
     async run(bot, message, args) {
         if (args.slice(1).length < 1) {
-            const msg = await message.channel.send("Put the message ID");
-            await msg.delete({ timeout: 3500 }).catch(err => console.log(err));
+            await message.channel.send("Put the message ID");
+
         } else if (args.slice(1).length > 1) {
-            const msg = await message.channel.send("Too many arguments!");
-            await msg.delete({ timeout: 3500 }).catch(err => console.log(err));
+            await message.channel.send("Too many arguments!");
         }
         else {
             try {
@@ -28,7 +27,7 @@ export default class extends Command {
                 const fetchedMessage = await message.channel.messages.fetch(args[1]);
                 if (fetchedMessage) {
                     await message.channel.send("Please provide all of the emoji names with the role name, one by one, separated with a comma.\ne.g: WubbzyWalk, A Wubbzy Fan, where the emoji name comes first, role name comes second.\nType `?done` when you finish.");
-                    const collector = new MessageCollector(message.channel, msgCollectorFilter.bind(null, message));
+                    const collector = new MessageCollector(message.channel, { filter: msgCollectorFilter.bind(null, message) });
                     const emojiRoleMappings = new Map();
                     collector.on('collect', msg => {
                         if (msg.content.toLowerCase() === '?done') {
@@ -36,14 +35,17 @@ export default class extends Command {
                             return;
                         }
                         const [emojiName, roleName] = msg.content.split(/,\s+/);
-                        if (!emojiName && !roleName) return;
+                        if (!emojiName) return;
+                        if (!roleName) return;
                         let emoji = allEmojis.find(emoji => (emoji.toString() === emojiName) || (emoji.name.toLowerCase() === emojiName.toLowerCase()));
                         if (!emoji) {
                             if (/(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/gmi.test(emojiName)) {
                                 emoji = emojiName;
                             } else {
                                 msg.channel.send("Emoji does not exist. Try again.")
-                                    .then(msg => msg.delete({ timeout: 2000 }))
+                                    .then(msg => bot.setTimeout(() => {
+                                        if (!msg.deleted) msg.delete();
+                                    }, 2000))
                                     .catch(err => console.log(err));
                                 return;
                             }
@@ -51,7 +53,9 @@ export default class extends Command {
                         const role = msg.guild.roles.cache.get(roleName) || msg.guild.roles.cache.find(role => role.name.toLowerCase() === roleName.toLowerCase());
                         if (!role) {
                             msg.channel.send("Role does not exist. Try again.")
-                                .then(msg => msg.delete({ timeout: 2000 }))
+                                .then(msg => bot.setTimeout(() => {
+                                    if (!msg.deleted) msg.delete();
+                                }, 2000))
                                 .catch(err => console.log(err));
                             return;
                         }
@@ -83,8 +87,7 @@ export default class extends Command {
                 }
             }
             catch (err) {
-                const msg = await message.channel.send("Invalid ID. Message was not found :(");
-                await msg.delete({ timeout: 3500 }).catch(err => console.log(err));
+                await message.channel.send("Invalid ID. Message was not found :(");
             }
         }
     }

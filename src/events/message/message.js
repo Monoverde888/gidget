@@ -1,7 +1,4 @@
 import Discord from "discord.js";
-import b from "../../utils/badwords.js";
-const badwords = new b();
-badwords.setOptions({ whitelist: ["crap", "butt", "bum", "poop", "balls"] });
 import Levels from "../../utils/discord-xp.js";
 const timer = new Discord.Collection();
 //Only 1 command at a time.
@@ -10,14 +7,13 @@ const internalCooldown = new Set();
 export default async (bot, message, nolevel = false) => {
   if (message.author.bot) return;
   if (message.guild && !message.channel.permissionsFor(bot.user.id).has("SEND_MESSAGES")) return;
-  await message.channel.fetch({ cache: true });
-  await message.member.fetch({ cache: true });
+  await message.member?.fetch({ cache: true }).catch(() => { });
   try {
     //All-time message code
     //For the moment this is a code for only 1 server
     if (message.guild) {
       if (message.guild.id === process.env.GUILD_ID && !message.channel.nsfw) {
-        if (badwords.isProfane(message.content.toLowerCase()) && !message.member.hasPermission("ADMINISTRATOR")) {
+        if (bot.badwords.isProfane(message.content.toLowerCase()) && (message.channel.parentID !== "621560838041501696")) {
           await message.delete();
           return await message.reply("swearing is not allowed in this server!");
         }
@@ -50,11 +46,11 @@ export default async (bot, message, nolevel = false) => {
           const botperms = message.guild.me.permissions;
           const botchannelperms = message.channel.permissionsFor(bot.user.id);
           if (message.author.id !== "577000793094488085") {
-            if (!userperms.has(command.permissions.user[0])) return message.channel.send("You do not have the necessary permissions to run this command.\nRequired permissions:\n`" + (!(new Discord.Permissions(command.permissions.user[0]).has(8)) ? (new Discord.Permissions(command.permissions.user[0]).toArray().join(", ") || "None") : "ADMINISTRATOR") + "`");
-            if (!userchannelperms.has(command.permissions.user[1])) return message.channel.send("You do not have the necessary permissions to run this command **in this channel**.\nRequired permissions:\n`" + (!(new Discord.Permissions(command.permissions.user[1]).has(8)) ? (new Discord.Permissions(command.permissions.user[1]).toArray().join(", ") || "None") : "ADMINISTRATOR") + "`");
+            if (!userperms.has(command.permissions.user[0])) return message.channel.send("You do not have the necessary permissions to run this command.\nRequired permissions:\n`" + (!(new Discord.Permissions(command.permissions.user[0]).has(8n)) ? (new Discord.Permissions(command.permissions.user[0]).toArray().join(", ") || "None") : "ADMINISTRATOR") + "`");
+            if (!userchannelperms.has(command.permissions.user[1])) return message.channel.send("You do not have the necessary permissions to run this command **in this channel**.\nRequired permissions:\n`" + (!(new Discord.Permissions(command.permissions.user[1]).has(8n)) ? (new Discord.Permissions(command.permissions.user[1]).toArray().join(", ") || "None") : "ADMINISTRATOR") + "`");
           }
-          if (!botperms.has(command.permissions.bot[0])) return message.channel.send("Sorry, I don't have sufficient permissions to run that command.\nRequired permissions:\n`" + (!(new Discord.Permissions(command.permissions.bot[0]).has(8)) ? (new Discord.Permissions(command.permissions.bot[0]).toArray().join(", ") || "None") : "ADMINISTRATOR") + "`");
-          if (!botchannelperms.has(command.permissions.bot[1])) return message.channel.send("Sorry, I don't have sufficient permissions to run that command **in this channel**.\nRequired permissions:\n`" + (!(new Discord.Permissions(command.permissions.bot[1]).has(8)) ? (new Discord.Permissions(command.permissions.bot[1]).toArray().join(", ") || "None") : "ADMINISTRATOR") + "`");
+          if (!botperms.has(command.permissions.bot[0])) return message.channel.send("Sorry, I don't have sufficient permissions to run that command.\nRequired permissions:\n`" + (!(new Discord.Permissions(command.permissions.bot[0]).has(8n)) ? (new Discord.Permissions(command.permissions.bot[0]).toArray().join(", ") || "None") : "ADMINISTRATOR") + "`");
+          if (!botchannelperms.has(command.permissions.bot[1])) return message.channel.send("Sorry, I don't have sufficient permissions to run that command **in this channel**.\nRequired permissions:\n`" + (!(new Discord.Permissions(command.permissions.bot[1]).has(8n)) ? (new Discord.Permissions(command.permissions.bot[1]).toArray().join(", ") || "None") : "ADMINISTRATOR") + "`");
         }
         try {
           internalCooldown.add(message.author.id);
@@ -134,8 +130,8 @@ export default async (bot, message, nolevel = false) => {
           if (matches && matches.length) {
             const urlobj = new URL(matches[0]);
             const [channelid, messageid] = urlobj.pathname.split("/").slice(3);
-            const channel = bot.channels.cache.get(channelid) || await bot.channels.fetch(channelid).catch(() => {});
-            if (channel && channel.permissionsFor(message.author.id).has(["VIEW_CHANNEL", "READ_MESSAGE_HISTORY"]) && channel.permissionsFor(bot.user.id).has(["VIEW_CHANNEL", "READ_MESSAGE_HISTORY"])) {
+            const channel = bot.channels.cache.get(channelid) || await bot.channels.fetch(channelid).catch(() => { });
+            if (channel && message.guild.id === channel.guild.id && channel.permissionsFor(message.author.id).has(["VIEW_CHANNEL", "READ_MESSAGE_HISTORY"]) && channel.permissionsFor(bot.user.id).has(["VIEW_CHANNEL", "READ_MESSAGE_HISTORY"])) {
               const msg = channel.messages.cache.filter(e => !e.partial).get(messageid) || (messageid ? (await channel.messages.fetch(messageid).catch(() => { })) : undefined)
               if (msg) {
                 const embed = new Discord.MessageEmbed()
@@ -149,7 +145,7 @@ export default async (bot, message, nolevel = false) => {
                 if (msg.attachments.first()) {
                   embed.setImage(msg.attachments.first().url);
                 }
-                await message.channel.send(embed);
+                await message.channel.send({ embeds: [embed] });
               }
             }
           }

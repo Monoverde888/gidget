@@ -1,4 +1,4 @@
-import { MessageAttachment } from 'discord.js';
+import { MessageAttachment, MessageButton, MessageActionRow } from 'discord.js';
 import fetch from 'node-fetch';
 import FileType from 'file-type';
 import gifResize from '../../utils/gifresize.js';
@@ -13,18 +13,16 @@ export default class extends Command {
     constructor(options) {
         super(options);
         this.aliases = ["e", "to48px"];
-        this.description = "Make a fake emoji and save it in your favorite GIFs.\nNow you can force it to PNG if you want (`g%emojify <target> -force-png`)\nSave it in your server: `g%emojify <target> -server`";
+        this.description = "Make a fake emoji and save it in your favorite GIFs.\nNow you can force it to PNG if you want (`g%emojify <target> -force-png`)\nSave it in your server with a button ;)";
         this.permissions = {
-            user: [0, 0],
-            bot: [0, 32768]
+            user: [0n, 0n],
+            bot: [0n, 32768n]
         }
     }
     async run(bot, message, args) {
         const force = args.includes("-force-png");
         if (force) args.splice(args.indexOf("-force-png"), 1);
-        const to_server = (args.includes("-server") && (message.guild?.me.hasPermission("MANAGE_EMOJIS") && message.member?.hasPermission("MANAGE_EMOJIS")));
-        if (to_server) args.splice(args.indexOf("-server"), 1);
-        if (!args[1] && !message.attachments.first()) return message.channel.send("Usage: emojify `<url/attachment/emoji> ['-force-png'] ['-server']`");
+        if (!args[1] && !message.attachments.first()) return message.channel.send("Usage: `emojify <url/attachment/emoji> ['-force-png']`");
         let url;
         const user = (args[1] || message.mentions.users.first()) ? (message.mentions.users.first() || bot.users.cache.get(args[1]) || bot.users.cache.find(e => (e.username === args.slice(1).join(" ") || e.tag === args.slice(1).join(" ") || e.username?.toLowerCase() === args.slice(1).join(" ")?.toLowerCase() || e.tag?.toLowerCase() === args.slice(1).join(" ")?.toLowerCase())) || message.guild?.members.cache.find(e => (e.nickname === args.slice(1).join(" ") || e.nickname?.toLowerCase() === args.slice(1).join(" ")?.toLowerCase()))?.user || await bot.users.fetch(args[1]).catch(() => { })) : null;
         if (user) {
@@ -45,23 +43,45 @@ export default class extends Command {
             url = parsed[0].url;
         }
         if (!url) return message.channel.send("Invalid URL!");
-        const buffer = await render(url);
+        const { pre_type, buffer } = await render(url);
+
+        const but_add = new MessageButton()
+            .setStyle("PRIMARY")
+            .setCustomID("emojify_c_add2sv")
+            .setLabel("Add to server")
+            .setDisabled(!(message.guild?.me.permissions.has("MANAGE_EMOJIS") && message.member?.permissions.has("MANAGE_EMOJIS")));
+
         const att = new MessageAttachment(buffer, `emoji.${force ? "png" : "gif"}`);
-        await message.channel.send(att);
-        if (to_server) {
-            await message.channel.send("Tell me the name of the new emoji (30s collector time).")
-            const col = message.channel.createMessageCollector((e) => e.author.id === message.author.id, { time: 30000 });
-            col.on("collect", (msg) => {
-                message.guild.emojis.create(buffer, msg.content, { reason: "emojify command" }).then((e) => {
-                    message.channel.send(`Emoji created correctly! -> ${e.toString()}`);
-                }).catch(e => {
-                    message.channel.send("Error: " + e);
-                }).finally(() => {
-                    col.stop();
+        const filter = (button) => {
+            if (button.user.id !== message.author.id) button.reply({ content: "You are not authorized", ephemeral: true });
+            return button.user.id === message.author.id;
+        };
+        const here = await message.channel.send({ files: [att], components: [new MessageActionRow().addComponents([but_add])] });
+
+        if (!but_add.disabled) {
+            const butcol = here.createMessageComponentInteractionCollector({ filter, idle: 60000 });
+            butcol.on("collect", async (button) => {
+                if (!(message.guild?.me.permissions.has("MANAGE_EMOJIS") && message.member?.permissions.has("MANAGE_EMOJIS"))) return button.reply("Nope", true);
+                await button.reply("Tell me the name of the new emoji (30s collector time).");
+                butcol.stop("a");
+                here.edit({ components: [new MessageActionRow().addComponents([but_add.setDisabled(true)])] });
+                const col = message.channel.createMessageCollector({ filter: (e) => e.author.id === message.author.id, time: 30000 });
+                col.on("collect", (msg) => {
+                    message.guild.emojis.create((pre_type == "svg") ? buffer : url, msg.content, { reason: "emojify command" }).then((e) => {
+                        button.editReply(`Emoji created correctly! -> ${e.toString()}`);
+                    }).catch(e => {
+                        button.editReply("Error: " + e);
+                    }).finally(() => {
+                        msg.delete();
+                        col.stop();
+                    });
+                });
+                col.on("end", (c, r) => {
+                    if (r === "time") button.editReply("Time's up!");
                 });
             });
-            col.on("end", (c, r) => {
-                if (r === "time") message.channel.send("Time's up!");
+            butcol.on("end", (c, r) => {
+                if (r === "idle") here.edit({ components: [new MessageActionRow().addComponents([but_add.setDisabled(true)])] });
             })
         }
     }
@@ -74,18 +94,18 @@ async function render(url) {
     const type = await FileType.fromBuffer(pre_buf);
     if (type?.mime === "image/gif") {
         const buffer = await gifResize({ width: 48, interlaced: true })(pre_buf);
-        return buffer;
+        return { pre_type: "gif", buffer };
     } else if (isSvg(pre_buf)) {
-        return await svg2img(pre_buf, { format: "png", width: 48, height: 48 });
+        return { pre_type: "svg", buffer: await svg2img(pre_buf, { format: "png", width: 48, height: 48 }) };
     } else if (process.platform === "win32") {
         const Jimp = (await import("jimp")).default;
         const img = await Jimp.read(pre_buf);
         img.resize(48, Jimp.AUTO);
         const buffer = await img.getBufferAsync(Jimp.MIME_PNG);
-        return buffer;
+        return { pre_type: "image", buffer };
     } else {
         const sharp = (await import("sharp")).default;
         const buffer = await sharp(pre_buf).resize(48).png().toBuffer();
-        return buffer;
+        return { pre_type: "image", buffer };
     }
 }

@@ -14,8 +14,8 @@ export default class extends Command {
         this.aliases = ["patpat", "pp"];
         this.description = "Pet pet";
         this.permissions = {
-            user: [0, 0],
-            bot: [0, 32768]
+            user: [0n, 0n],
+            bot: [0n, 32768n]
         }
     }
     async run(bot, message, args) {
@@ -58,7 +58,7 @@ export default class extends Command {
             const buf = await petpet(torender, delay);
             message.channel.stopTyping(true);
             await message.channel.send({
-                content: (post ? "" : "Usage: `petpet [user/emoji/image/attachment] [-<FPS>]`"),
+                content: (post ? undefined : "Usage: `petpet [user/emoji/image/attachment] [-<FPS>]`"),
                 files: [{
                     attachment: buf,
                     name: "petpet.gif",

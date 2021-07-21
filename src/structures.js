@@ -9,7 +9,7 @@ import memberwarns from './database/models/warn2.js';
 import { Structures } from 'discord.js';
 import confessions from './database/models/confessionconfig.js';
 
-//To differentiate user errors (maybe?)
+//To differentiate user errors
 class StructureError extends Error {
     constructor(error) {
         super();
@@ -17,6 +17,27 @@ class StructureError extends Error {
         this.message = error;
     }
 }
+
+
+/*Structures.extend("TextChannel", TextChannel => {
+    return class extends TextChannel {
+        constructor(guild, data) {
+            super(guild, data);
+            this.snipe = null;
+            this.snipeTimeout = null;
+        }
+        deleteSnipe() {
+            this.client.clearTimeout(this.snipeInterval);
+            this.snipe = null;
+        }
+        setSnipe(message) {
+            this.snipe = message;
+            this.snipeTimeout = this.client.setTimeout(() => {
+                this.snipe = null;
+            }, 300000);
+        }
+    }
+});*/
 
 Structures.extend('Guild', Guild => {
     return class extends Guild {
@@ -64,7 +85,7 @@ Structures.extend('Guild', Guild => {
         }
 
         async setConfessionChannel(channel) {
-            if (channel.type !== "text" && channel.type !== "news") throw new StructureError("Only text channels are allowed!");
+            if (!channel.isText()) throw new StructureError("Only text channels are allowed!");
             let doc = await confessions.findOneAndUpdate({ guildID: { $eq: this.id } }, { $set: { channelID: channel.id } }, { new: true });
             if (!doc) {
                 doc = await confessions.create({
@@ -130,7 +151,7 @@ Structures.extend('Guild', Guild => {
 
         async getInviteCount() {
             const col = await this.fetchInvites();
-            const invites = col.array();
+            const invites = Array.from(col.values());
             const inviteCounter = {}
 
             for (const invite of invites) {
@@ -515,26 +536,6 @@ Structures.extend('Guild', Guild => {
             return true;
         }
     };
-});
-
-Structures.extend("TextChannel", TextChannel => {
-    return class extends TextChannel {
-        constructor(guild, data) {
-            super(guild, data);
-            this.snipe = null;
-            this.snipeInterval = null;
-        }
-        deleteSnipe() {
-            this.client.clearInterval(this.snipeInterval);
-            this.snipe = null;
-        }
-        setSnipe(message) {
-            this.snipe = message;
-            this.snipeInterval = this.client.setInterval(() => {
-                this.snipe = null;
-            }, 300000);
-        }
-    }
 });
 
 Structures.extend("GuildMember", (GuildMember) => {

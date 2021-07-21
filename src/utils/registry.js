@@ -11,10 +11,18 @@ class ErrorCommand extends Command {
         this.secret = true;
         this.error = options.err;
     }
-
-    // eslint-disable-next-line no-unused-vars
-    async run(bot, message, args) {
+    async run(bot, message) {
         await message.channel.send("That command is not loaded due to error: " + this.error);
+    }
+}
+class SlashCommandOnlyCommand extends Command {
+    constructor(options) {
+        super(options);
+        this.description = `**(Slash command)** ${options.description}`;
+    }
+    async run(bot, message) {
+        if (message.deletable) await message.delete();
+        await message.channel.send("This is a slash command, please use it in the Discord interface.");
     }
 }
 export async function registerCommands(bot, dir) {
@@ -26,10 +34,9 @@ export async function registerCommands(bot, dir) {
     // Loop through each file.
     for (const file of files) {
         const stat = await fs.lstat(path.join(__dirname, dir, file));
-        if (stat.isDirectory()) // If file is a directory, recursive call recurDir
+        if (stat.isDirectory())
             await registerCommands(bot, path.join(dir, file));
         else {
-            // Check if file is a .js file.
             if (file.endsWith(".js")) {
                 const cmdName = file.substring(0, file.indexOf(".js"));
                 try {
@@ -49,15 +56,15 @@ export async function registerCommands(bot, dir) {
     global.Command = null;
     delete global.Command;
 }
+
 export async function registerEvents(bot, dir) {
     const files = await fs.readdir(path.join(__dirname, dir));
     // Loop through each file.
     for (const file of files) {
         const stat = await fs.lstat(path.join(__dirname, dir, file));
-        if (stat.isDirectory()) // If file is a directory, recursive call recurDir
+        if (stat.isDirectory())
             await registerEvents(bot, path.join(dir, file));
         else {
-            // Check if file is a .js file.
             if (file.endsWith(".js")) {
                 const eventName = file.substring(0, file.indexOf(".js"));
                 try {
@@ -74,27 +81,39 @@ export async function registerEvents(bot, dir) {
     }
 }
 
-export async function registerWsEvents(bot, dir) {
+//RECOMMENDED TO EXECUTE THIS AFTER registerCommands FUNCTION.
+export async function registerSlashCommands(bot, dir) {
+    if (!bot.slashCommands) bot.slashCommands = new Collection();
+    if (!global.SlashCommand) global.SlashCommand = (await import("file:///" + path.join(__dirname, "slashcommand.js"))).default;
+    const arr = dir.split(process.platform === "win32" ? "\\" : "/");
+    const category = arr[arr.length - 1];
     const files = await fs.readdir(path.join(__dirname, dir));
     // Loop through each file.
     for (const file of files) {
         const stat = await fs.lstat(path.join(__dirname, dir, file));
-        if (stat.isDirectory()) // If file is a directory, recursive call recurDir
-            await registerEvents(bot, path.join(dir, file));
+        if (stat.isDirectory())
+            await registerSlashCommands(bot, path.join(dir, file));
         else {
-            // Check if file is a .js file.
             if (file.endsWith(".js")) {
-                const eventName = file.substring(0, file.indexOf(".js"));
+                const name = file.substring(0, file.indexOf(".js"));
                 try {
-                    const eventModule = await import("file:///" + path.join(__dirname, dir, file));
-                    bot.ws.on(eventName, eventModule.default.bind(null, bot));
-                    if (process.argv[2] === "ci") console.log(`Event ${eventName} loaded =D`);
+                    const cmdModule = await import("file:///" + path.join(__dirname, dir, file));
+                    const cmdClass = new cmdModule.default({ name });
+                    bot.slashCommands.set(name, cmdClass);
+
+                    if (process.argv[2] === "ci") console.log(`Command ${name} loaded =D`);
+                    else if (bot.commands && !bot.commands.get(name) && !cmdClass.onlyguild) {
+                        const cc = new SlashCommandOnlyCommand({ name, description: cmdClass.deployOptions.description, category });
+                        bot.commands.set(name, cc);
+                    }
                 }
                 catch (err) {
                     process.exitCode = 1;
-                    console.error("There was an error initializing the " + eventName + " event\n", err);
+                    console.error("There was an error initializing the " + name + " command\n", err);
                 }
             }
         }
     }
+    global.SlashCommand = null;
+    delete global.SlashCommand;
 }

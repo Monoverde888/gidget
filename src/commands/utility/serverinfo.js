@@ -5,8 +5,8 @@ export default class extends Command {
     this.aliases = ["server"];
     this.description = "Server info";
     this.permissions = {
-      user: [0, 0],
-      bot: [0, 16384]
+      user: [0n, 0n],
+      bot: [0n, 16384n]
     };
   }
   async run(bot, message, args) {
@@ -16,12 +16,12 @@ export default class extends Command {
       bot.guilds.cache.find(e => e.name === args.slice(1).join(" ")) ||
       bot.guilds.cache.find(e => e.name.toLowerCase() === args.slice(1).join(" ").toLowerCase()))
       : message.guild;
-    if(!server) {
-      broadcastedServer = args[1] ? (await bot.shard.fetchClientValues(bot.shard.id ? `guilds.cache.map(e => e && e.toJSON())` : `guilds.cache`)).find(e => e.find(a => a.name === args.slice(1).join(" ") || a.name.toLowerCase() === args.slice(1).join(" ").toLowerCase() || a.id === args[1]))?.find(a => a.name === args.slice(1).join(" ") || a.name.toLowerCase() === args.slice(1).join(" ").toLowerCase() || a.id === args[1]) : undefined;
-      server = broadcastedServer ? (await bot.guilds.fetch(broadcastedServer.id, false).catch(() => {})) : undefined;
+    if (!server) {
+      broadcastedServer = args[1] ? (await bot.shard.broadcastEval(c => c.guilds.cache)).find(e => e.find(a => a.name === args.slice(1).join(" ") || a.name.toLowerCase() === args.slice(1).join(" ").toLowerCase() || a.id === args[1]))?.find(a => a.name === args.slice(1).join(" ") || a.name.toLowerCase() === args.slice(1).join(" ").toLowerCase() || a.id === args[1]) : undefined;
+      server = broadcastedServer ? (await bot.guilds.fetch(broadcastedServer.id, false).catch(() => { })) : undefined;
     }
-    if(!server) {
-      server = await bot.fetchGuildPreview(args[1]).catch(() => {});
+    if (!server) {
+      server = await bot.fetchGuildPreview(args[1]).catch(() => { });
     }
     if (!server) return message.channel.send("Invalid name/ID!\nSearch by name only works if the bot is on that server\nSearch by ID only works whether the bot is on that server or if it is a discoverable server");
     //if ((server instanceof Discord.Guild) && !server.available) return message.channel.send("That server is not available.\nPossibly the server is in an outage.");
@@ -39,6 +39,7 @@ export default class extends Command {
     let rroles;
     let ae;
     let emojis;
+    let allEmojis;
     /*
     let bots;
     let rmembers;
@@ -68,7 +69,7 @@ export default class extends Command {
         const bans = await server.fetchBans();
 
         if (bans.first()) {
-          bannumber = bans.size + " bans";
+          bannumber = bans.size.toString() + " bans";
         } else {
           bannumber = "Without bans";
         }
@@ -76,7 +77,7 @@ export default class extends Command {
         const invites = await server.fetchInvites();
 
         if (invites.first()) {
-          invitenum = invites.size + " invites";
+          invitenum = invites.size.toString() + " invites";
         } else {
           invitenum = "Without invites";
         }
@@ -94,18 +95,20 @@ export default class extends Command {
       const vanity = await server.fetchVanityData().catch(() => { });
       if (vanity && vanity.code) {
         links.push("[Vanity invite URL" + (vanity.uses ? (" (" + vanity.uses + " uses)") : "") + "](https://discord.gg/" + (vanity.code) + ")");
-      } else if(server.vanityURLCode) {
+      } else if (server.vanityURLCode) {
         const vanity = {
           uses: server.vanityURLUses,
           code: server.vanityURLCode
         };
         links.push("[Vanity invite URL" + (vanity.uses ? (" (" + vanity.uses + " uses)") : "") + "](https://discord.gg/" + (vanity.code) + ")");
       }
-      
-      ae = server.emojis.cache.filter(e => e.animated === true).size;
 
-      emojis = server.emojis.cache.size - ae;
-      
+      allEmojis = await message.guild.emojis.fetch();
+
+      ae = allEmojis.filter(e => e.animated === true).size;
+
+      emojis = allEmojis.size - ae;
+
       roles = server.roles.cache.size;
 
       mroles = server.roles.cache.filter(r => r.managed === true)
@@ -157,10 +160,13 @@ export default class extends Command {
       embed.addField("Description", server.description, true);
     }
     if (server instanceof Discord.Guild) {
-      embed.addField("Server Owner", (server.owner.partial ? (await server.owner.fetch()).user.tag : server.owner.user.tag) + "\n" + server.owner.toString(), true)
+      const owner = await server.fetchOwner();
+      embed.addField("Server Owner", owner.user.tag + "\n" + owner.toString(), true)
         .addField("Server Create Date", bot.botIntl.format(server.createdAt), true)
-        .addField("Server Region", server.region, true)
         .addField("Verification Level", server.verificationLevel, true)
+        .addField("Default Message Notifications", server.defaultMessageNotifications, true)
+        .addField("Partnered?", server.partnered ? "**Yes**" : "No", true)
+        .addField("Verified?", server.verified ? "**Yes**" : "No", true)
       if (server.rulesChannel) {
         embed.addField("Rules channel", server.rulesChannel.toString(), true);
       }
@@ -168,11 +174,11 @@ export default class extends Command {
         embed.addField("Discord private updates", server.publicUpdatesChannel.toString(), true);
       }
       embed.addField("Member Count", server.memberCount?.toString() || (broadcastedServer ? broadcastedServer.memberCount?.toString() || "?" : "?"), true)
-        .addField("Channel Count", `${server.channels.cache.filter(c => c.type === "text" || c.type === "voice").size} (${catname})\nText = ${server.channels.cache.filter(c => c.type === "text").size}\nVoice = ${server.channels.cache.filter(c => c.type === "voice").size}`, true)
-        .addField("Emojis", `${server.emojis.cache.size}\nNormal = ${emojis}\nAnimated = ${ae}`, true)
+        .addField("Channel Count", `${server.channels.cache.filter(c => c.isText() || c.type === "voice").size} (${catname})\nText-based = ${server.channels.cache.filter(c => c.isText()).size}\nVoice = ${server.channels.cache.filter(c => c.type === "voice").size}`, true)
+        .addField("Emojis", `${allEmojis.size.toString()}\nNormal = ${emojis}\nAnimated = ${ae}`, true)
         .addField("Roles", `${roles}\nNormal = ${rroles}\nManaged = ${mroles}`, true)
-        .addField("Server Boost Level", server.premiumTier, true)
-        .addField("Boosts", server.premiumSubscriptionCount, true)
+        .addField("Server Boost Level", server.premiumTier.toString(), true)
+        .addField("Boosts", server.premiumSubscriptionCount.toString(), true)
       if (server.systemChannel) {
         embed.addField("System Channel", server.systemChannel.toString(), true);
       }
@@ -184,18 +190,19 @@ export default class extends Command {
       }
     }
     embed.addField("Features", server.features.join("\n") || "None", true)
-      .addField("Links", links.join(", "))
       .setThumbnail((server instanceof Discord.Guild) ? server.bannerURL({ format: "png", size: 128 }) : server.discoverySplashURL({ format: "png", size: 128 }))
       .setImage(server.splashURL({ format: "png", size: 128 }))
       .setColor("#FF00FF")
       .setTimestamp();
+    if (server.maximumMembers) embed.addField("Maximum members", server.maximumMembers.toString(), true);
+    embed.addField("Links", links.join(", "));
     if ((message.guild ? message.guild.id === "402555684849451028" : false) && server.id === "402555684849451028") {
       const fetch = server.roles.cache.get("402559343540568084").members.map(m => m.user);
       const admins = fetch.join("\n");
       embed.addField("Admin List", admins);
-   await message.channel.send(embed);
+      await message.channel.send({ embeds: [embed] });
     } else {
-   await message.channel.send(embed);
+      await message.channel.send({ embeds: [embed] });
     }
   }
 }

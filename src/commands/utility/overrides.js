@@ -1,3 +1,5 @@
+import { Util } from "discord.js";
+
 export default class extends Command {
   constructor(options) {
     super(options);
@@ -6,12 +8,10 @@ export default class extends Command {
     this.aliases = ["overwrites"];
   }
   async run(bot, message, args) {
-    const channel = message.mentions.channels.first() || message.guild.channels.cache.get(args[1]) || message.guild.channels.cache.find(c => c.name === args.slice(1).join(" ")) || message.guild.channels.cache.find(c => c.parentID === message.channel.parentID && c.position === parseInt(args[1])) || await message.guild.channels.fetch(args[1] || "123").catch(() => {}) || message.channel;
+    const channel = message.mentions.channels.first() || message.guild.channels.cache.get(args[1]) || message.guild.channels.cache.find(c => c.name === args.slice(1).join(" ")) || message.guild.channels.cache.find(c => c.parentID === message.channel.parentID && c.position === parseInt(args[1])) || await message.guild.channels.fetch(args[1] || "123").catch(() => { }) || message.channel;
     if (channel.guild.id !== message.guild.id) return message.channel.send("The channel you have put belongs to another server.");
-    const rr = channel.permissionOverwrites.filter(m => m.type === "member").map(m => m.id)
-    for (const i in rr) {
-      await message.guild.members.fetch(rr[i]);
-    }
+    const rr = channel.permissionOverwrites.filter(m => m.type === "member" && !message.guild.members.cache.has(m.id)).map(m => m.id)
+    if (rr.length) await message.guild.members.fetch({ user: rr });
     const permissions = channel.permissionOverwrites.map(m => {
       let text = ``;
       if (m.type === "member") {
@@ -31,7 +31,7 @@ export default class extends Command {
           })
         }
       }
-      else text += `[👪] ${message.guild.roles.cache.get(m.id).name}:\n`
+      else text += `[👪] ${message.guild.roles.cache.get(m.id).name}:\n`;
       let doit = false;
       if (m.allow.bitfield !== 0) {
         doit = true;
@@ -47,6 +47,11 @@ export default class extends Command {
       return text;
     });
     if (!permissions[0]) return message.channel.send("There are no channel overrides here.")
-    else message.channel.send(`\n${channel.permissionsLocked ? "The channel is synchronized with its parent category." : "The channel is not synchronized with its parent category."}\nChannel overrides for #` + channel.name, { code: permissions.join("\n\n"), split: true })
+    else {
+      const contents = Util.splitMessage(`\`\`\`${permissions.join("\n\n")}\n${channel.permissionsLocked ? "The channel is synchronized with its parent category." : "The channel is not synchronized with its parent category."}\nChannel overrides for #${channel.name}\`\`\``, { maxLength: 2000 });
+      for (const content of contents) {
+        message.channel.send(content);
+      }
+    }
   }
 }
